@@ -124,8 +124,4 @@ Test file: `~/Documents/3D prints/CE5_xyzCalibration_cube.gcode` — Cura 5.13, 
 `;TIME_ELAPSED:`, so remaining-time can be interpolated properly instead of guessed
 linearly.
 
-## Audience
 
-Victor is new to this. Prefer plain language over Marlin jargon in the UI, explain *why*
-something is blocked rather than greying it out, and keep the technical surface in
-Advanced → Console.
