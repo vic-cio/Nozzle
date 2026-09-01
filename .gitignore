@@ -1,0 +1,5 @@
+.build/
+.swiftpm/
+Nozzle.app/
+*.xcodeproj
+.DS_Store
