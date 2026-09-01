@@ -12,7 +12,7 @@ Nozzle is **not** a slicer. Keep slicing in Cura; Nozzle loads the `.gcode` it p
 You need Xcode installed (any recent version). Then, in Terminal:
 
 ```bash
-cd /Users/victorciobanu/Documents/Claude/Projects/nozzle
+cd nozzle
 ./build-app.sh
 open Nozzle.app
 ```
@@ -42,17 +42,7 @@ a bare executable, and macOS wants an `.app` bundle.
 
 ---
 
-## Current status
-
-| Milestone | Scope | State |
-|---|---|---|
-| 1 | App shell, port discovery, connect, `M115`/`M105`, Console | **Done, tested on hardware** |
-| 2 | Movement, homing, heaters, printer state | **Done, interactive hardware checks owed** |
-| 3 | Load Cura G-code, validate it, print with progress | **Done, tested by a physical print** |
-| 4 | Pause/resume/cancel, temperature graph, sleep prevention | **Done, targeted hardware checks owed** |
-| 5 | Guided bed levelling, polish, error handling | Planned — see `MILESTONE-5.md` |
-
-What each screen does today:
+## What it does
 
 - **Print** — choose a `.gcode` file with the button or by dropping it on the window.
   Nozzle reads it, shows the size, layer count, estimated time, filament and temperatures,
@@ -68,21 +58,10 @@ What each screen does today:
   and a rolling temperature-history graph.
 - **Console** — send any command by hand, with a confirmation on the risky ones.
 
-**Milestone 3 completed its first physical print on 2026-08-10.** The part was solid and
-had the expected proportions. Milestone 2's interactive controls and Milestone 4's
-pause/stop paths still need targeted hardware checks; see `HARDWARE-TESTS.md`.
+### Real-world Marlin/Creality findings
 
-### What the actual printer reported
-
-Verified against the real machine on `/dev/cu.usbserial-1110` at 115200 baud
-(read-only: `M115`, `M105`, `M114` — no movement, no heaters):
-
-```
-FIRMWARE_NAME:Marlin Creality 3D   PROTOCOL_VERSION:V1.0   MACHINE_TYPE:Ender-5 Pro
-EXTRUDER_COUNT:1
-```
-
-Two findings that change how Nozzle behaves on this machine:
+Testing against a Creality-firmware Ender-5 Pro at 115200 baud surfaced two quirks that
+shape how Nozzle talks to the printer:
 
 1. **`Cap:EMERGENCY_PARSER:0`** — this firmware has no emergency parser, so `M112` is
    *not* immediate: it only runs once the queued moves ahead of it finish. Nozzle warns
@@ -103,15 +82,12 @@ Two findings that change how Nozzle behaves on this machine:
    polling, with an explanation in the Console. Without that check the temperature
    readout would have silently frozen after connecting.
 
-Re-run this check any time with:
+Point `NOZZLE_REAL_PORT` at your printer's serial device to re-run this check against
+real hardware:
 
 ```bash
-NOZZLE_REAL_PORT=/dev/cu.usbserial-1110 swift test --filter Hardware
+NOZZLE_REAL_PORT=/dev/cu.usbserial-XXXX swift test --filter Hardware
 ```
-
-Milestone 3 has completed a physical print. Milestone 4's temperature graph displayed
-real print and cooldown data, but Pause/Resume/Stop and sleep prevention have **not** been
-verified on hardware. Milestone 5 is planned but not implemented.
 
 ---
 
