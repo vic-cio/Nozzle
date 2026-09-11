@@ -65,6 +65,7 @@ final class PrinterController {
     private var printJob: PrintJob?
     private var jobTask: Task<Void, Never>?
     private let sleepBlocker = SleepBlocker()
+    private var controlServer: NozzleControlServer?
 
     private let maximumTemperatureSamples = 1_800   // ~1 hour at 2 s intervals
 
@@ -84,6 +85,22 @@ final class PrinterController {
         // Plugging the printer in after launch used to leave the picker empty until
         // the user found the Refresh button. Watch for it instead.
         portMonitor.start { [weak self] in self?.portsChangedOnTheirOwn() }
+    }
+
+    func startControlServer() {
+        guard controlServer == nil else { return }
+        let server = NozzleControlServer { [weak self] request in
+            guard let self else {
+                return .failure(requestID: request.id, code: "app_unavailable", message: "The Nozzle app is closing.")
+            }
+            return await self.handleControlRequest(request)
+        }
+        do {
+            try server.start()
+            controlServer = server
+        } catch {
+            lastError = "Could not start local CLI control: \(error.localizedDescription)"
+        }
     }
 
     // MARK: - Ports
@@ -164,6 +181,7 @@ final class PrinterController {
 
         do {
             try await connection.connect()
+            if state.activity == .connecting { state.activity = .connected }
             if !useDemoPrinter {
                 profile.preferredPortPath = portPath
             }
@@ -176,7 +194,10 @@ final class PrinterController {
 
     func disconnect() async {
         await connection?.disconnect()
-        // The event stream reports the state change; nothing else to do here.
+        if state.activity.isConnected {
+            state.activity = .disconnected
+            resetVolatileState()
+        }
     }
 
     private func observe(_ connection: MarlinConnection) {
@@ -560,6 +581,12 @@ final class PrinterController {
                 : "Turning the \(name) off…"
             await withOperation(label) {
                 guard await self.send(plan) else { return }
+                switch heater {
+                case .hotend:
+                    if var reading = self.state.hotend { reading.target = celsius; self.state.hotend = reading }
+                case .bed:
+                    if var reading = self.state.bed { reading.target = celsius; self.state.bed = reading }
+                }
                 await self.refreshTemperatures()
             }
         }
@@ -583,6 +610,8 @@ final class PrinterController {
         guard state.activity.isConnected else { lastError = "Connect to the printer first."; return }
         await withOperation("Turning the heaters off…") {
             guard await self.send(MovePlanner.heatersOff()) else { return }
+            if var hotend = self.state.hotend { hotend.target = 0; self.state.hotend = hotend }
+            if var bed = self.state.bed { bed.target = 0; self.state.bed = bed }
             await self.refreshTemperatures()
         }
     }
@@ -627,6 +656,74 @@ final class PrinterController {
             lastError = error.localizedDescription
             return false
         }
+    }
+
+    // MARK: - Local CLI control
+
+    private func controlSnapshot() -> NozzleControlSnapshot {
+        let position = state.position.map { ControlPosition(x: $0.x, y: $0.y, z: $0.z, e: $0.e) }
+        return NozzleControlSnapshot(
+            activity: state.activity.label,
+            connected: state.activity.isConnected,
+            operation: operation,
+            portPath: state.portPath,
+            hotend: state.hotend.map { ControlTemperature(current: $0.current, target: $0.target) },
+            bed: state.bed.map { ControlTemperature(current: $0.current, target: $0.target) },
+            position: position,
+            homedAxes: PrinterAxis.allCases.filter(state.homedAxes.contains),
+            firmware: state.firmware?.shortDescription
+        )
+    }
+
+    private func handleControlRequest(_ request: NozzleControlRequest) async -> NozzleControlResponse {
+        if case .status = request.action {
+            return .success(requestID: request.id, snapshot: controlSnapshot())
+        }
+        guard operation == nil, !isConnecting else {
+            return .failure(requestID: request.id, code: "busy", message: operation ?? "Connecting…", snapshot: controlSnapshot())
+        }
+        lastError = nil
+        switch request.action {
+        case .status: break
+        case .connect:
+            if !state.activity.isConnected { await connect() }
+        case .disconnect:
+            await disconnect()
+        case .home(let axes):
+            await home(axes)
+        case .jog(let axis, let millimetres):
+            guard millimetres.isFinite, millimetres != 0 else {
+                return .failure(requestID: request.id, code: "invalid_request", message: "Jog distance must be finite and nonzero.", snapshot: controlSnapshot())
+            }
+            await jog(axis: axis, millimetres: millimetres)
+        case .heat(let heater, let celsius):
+            guard celsius.isFinite else {
+                return .failure(requestID: request.id, code: "invalid_request", message: "Temperature must be finite.", snapshot: controlSnapshot())
+            }
+            await setTemperature(heater, celsius: celsius)
+        case .extrude(let millimetres):
+            guard millimetres.isFinite, millimetres != 0 else {
+                return .failure(requestID: request.id, code: "invalid_request", message: "Extrusion distance must be finite and nonzero.", snapshot: controlSnapshot())
+            }
+            await extrude(millimetres: millimetres)
+        case .heatersOff:
+            await turnHeatersOff()
+        case .motorsOff:
+            await disableMotors()
+        case .send(let raw, let confirmedDangerous):
+            let command = MarlinConnection.sanitise(raw)
+            guard !command.isEmpty else {
+                return .failure(requestID: request.id, code: "invalid_request", message: "Console command is empty.", snapshot: controlSnapshot())
+            }
+            guard !CommandSafety.assess(command).requiresConfirmation || confirmedDangerous else {
+                return .failure(requestID: request.id, code: "confirmation_required", message: "Dangerous console command was not confirmed.", snapshot: controlSnapshot())
+            }
+            await sendConsoleCommand(command)
+        }
+        if let error = lastError {
+            return .failure(requestID: request.id, code: "operation_failed", message: error, snapshot: controlSnapshot())
+        }
+        return .success(requestID: request.id, snapshot: controlSnapshot())
     }
 
     // MARK: - Display helpers

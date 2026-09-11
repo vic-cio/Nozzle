@@ -13,7 +13,7 @@ public enum PrinterAxis: String, CaseIterable, Sendable, Hashable, Codable, Iden
 }
 
 /// Which heater a command is aimed at.
-public enum Heater: String, Sendable, Equatable, CaseIterable, Identifiable {
+public enum Heater: String, Sendable, Equatable, CaseIterable, Codable, Identifiable {
     case hotend
     case bed
 

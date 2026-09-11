@@ -35,10 +35,11 @@ NOZZLE_DEMO=1 ./Nozzle.app/Contents/MacOS/Nozzle
 
 ### Command-line tools
 
-Use `swift run nozzle-cli --help` for GUI-free file inspection, validation, command
-previews, profile inspection, serial discovery, and console risk assessment. Reports
-are JSON by default; no CLI command opens a printer connection. See [CLI usage](docs/cli.md)
-for commands, exit codes, and validation limits.
+Use `swift run nozzle-cli --help` for file inspection, validation, command previews,
+profile inspection, serial discovery, and local control of the running app. Reports
+are JSON by default. The app remains the only process that opens the printer connection,
+so CLI commands can work alongside the GUI. See [CLI usage](docs/cli.md) for commands,
+exit codes, and validation limits.
 
 ### Why there is no `.xcodeproj`
 

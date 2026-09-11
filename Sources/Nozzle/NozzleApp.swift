@@ -11,6 +11,7 @@ struct NozzleApp: App {
                 .environment(controller)
                 .frame(minWidth: 820, minHeight: 600)
                 .task {
+                    controller.startControlServer()
                     guard controller.autoConnectOnLaunch else { return }
                     await controller.connect()
                 }

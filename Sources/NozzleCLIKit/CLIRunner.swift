@@ -7,10 +7,11 @@ public struct CLIOutput: Sendable {
     public let exitCode: Int32
 }
 
-/// The executable only writes these streams and exits. No GUI or serial connection is opened.
+/// The executable only writes these streams and exits. Live commands ask the running app
+/// to act; the CLI itself never opens the serial device.
 public enum CLIRunner {
     public static let help = """
-    Nozzle CLI — offline G-code tools and serial device discovery
+    Nozzle CLI — G-code tools and local control of the running Nozzle app
     Usage:
       nozzle-cli [--help | --version] [--json]
       nozzle-cli ports [--include-dialin]
@@ -19,12 +20,21 @@ public enum CLIRunner {
       nozzle-cli file validate PATH [--profile PATH]
       nozzle-cli file commands PATH [--offset N] [--limit N]
       nozzle-cli command assess 'M112'
+      nozzle-cli live status [--socket PATH]
+      nozzle-cli live connect | disconnect
+      nozzle-cli live home [--axes XYZ]
+      nozzle-cli live jog X|Y|Z MILLIMETRES
+      nozzle-cli live heat nozzle|bed CELSIUS
+      nozzle-cli live extrude MILLIMETRES
+      nozzle-cli live heaters-off | motors-off
+      nozzle-cli live send 'M105' [--confirm-dangerous]
 
     All commands emit one JSON document; help is text unless --json is present.
     --json is accepted on every command. -- ends option parsing.
     Profiles default to stock Ender-5 Pro, never ambient app preferences.
     Command pages use zero-based offsets (default 0), limit 1–1000 (default 100),
-    and one-based source line numbers. No command opens a printer or sends G-code.
+    and one-based source line numbers. Live commands require the Nozzle app to be open;
+    the app remains the sole owner of the serial connection.
     Validation uses Nozzle's metadata checks, not a motion simulation or safety proof.
     Exit: 0 success, 1 input/I/O error, 2 usage error, 3 blocking validation findings.
     """
@@ -32,6 +42,14 @@ public enum CLIRunner {
     public static func run(_ arguments: [String]) -> CLIOutput {
         do { return try execute(CLICommand.parse(arguments)) }
         catch let error as CLIError { return failure(error) }
+        catch let error as NozzleControlTransportError {
+            switch error {
+            case .appUnavailable:
+                return failure(CLIError(code: "app_unavailable", message: error.localizedDescription))
+            case .invalidMessage:
+                return failure(CLIError(code: "invalid_response", message: error.localizedDescription))
+            }
+        }
         catch let error as GCodeError {
             return failure(CLIError(code: "gcode_input", message: error.localizedDescription))
         } catch {
@@ -165,6 +183,16 @@ public enum CLIRunner {
             return try success(Assessment(command: cleaned, classification: risk.requiresConfirmation ? "dangerous" : "ordinary",
                                           requiresConfirmation: risk.requiresConfirmation, reason: reason,
                                           isEmergency: CommandSafety.isEmergency(cleaned)))
+        case .live(let action, let socketPath):
+            let socketURL = socketPath.map { URL(fileURLWithPath: $0) } ?? NozzleControlEndpoint.defaultSocketURL
+            let response = try NozzleControlClient(socketURL: socketURL).send(action)
+            if let error = response.error {
+                throw CLIError(code: error.code, message: error.message)
+            }
+            guard let snapshot = response.snapshot else {
+                throw CLIError(code: "invalid_response", message: "The Nozzle app returned no printer snapshot.")
+            }
+            return try success(snapshot)
         }
     }
 }

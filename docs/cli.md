@@ -1,8 +1,9 @@
 # Nozzle CLI
 
-`nozzle-cli` is a macOS 14+ command-line companion to the app. It uses NozzleCore
-without launching SwiftUI, opening serial devices, moving a printer, or modifying
-files. It needs the same Swift 6 toolchain as Nozzle and adds no dependencies.
+`nozzle-cli` is a macOS 14+ command-line companion to the app. Offline commands use
+NozzleCore directly. `live` commands send a local request to the running app, which
+remains the only process that opens the printer's serial device. The CLI needs the same
+Swift 6 toolchain as Nozzle and adds no dependencies.
 
 ```sh
 swift build --product nozzle-cli
@@ -19,6 +20,15 @@ nozzle-cli file inspect cube.gcode
 nozzle-cli file validate cube.gcode --profile printer.json
 nozzle-cli file commands cube.gcode --offset 0 --limit 20
 nozzle-cli command assess 'M502'
+nozzle-cli live status
+nozzle-cli live connect
+nozzle-cli live home --axes XZ
+nozzle-cli live jog X 5
+nozzle-cli live heat nozzle 210
+nozzle-cli live extrude 5
+nozzle-cli live heaters-off
+nozzle-cli live motors-off
+nozzle-cli live send 'M105'
 nozzle-cli --help --json
 ```
 
@@ -45,6 +55,12 @@ nozzle-cli --help --json
 - `command assess` accepts exactly one quoted line and reports the core console
   warning classification, reason when dangerous, and emergency classification.
   It is a typo guard, not a complete G-code validator; `ordinary` does not mean safe.
+- `live` routes status and small manual operations through the open Nozzle app. This
+  lets scripts and agents work alongside the GUI without competing for the USB serial
+  port. Every successful response includes the app's current connection, operation,
+  temperatures, position, and homed axes. Movement and extrusion retain the same app
+  checks; dangerous raw commands require `--confirm-dangerous`. Use `--socket PATH`
+  only for testing or a nonstandard app endpoint.
 
 Every command emits one JSON document to stdout, except text help. `--json` is
 accepted anywhere before `--`; help then also returns JSON. `--` ends option parsing,
@@ -56,7 +72,8 @@ Successful reports have `{"schemaVersion":1,"data":...}`. JSON keys are sorted,
 there are no timestamps or progress chatter, and optional values are omitted.
 Input failures leave stdout empty and write
 `{"schemaVersion":1,"error":{"code":"...","message":"...","exitCode":1}}`
-to stderr. Codes are `usage`, `profile_input`, `gcode_input`, and `io_error`.
+to stderr. Codes include `usage`, `profile_input`, `gcode_input`, `io_error`,
+`app_unavailable`, `busy`, and `operation_failed`.
 Do not merge stderr into stdout when parsing JSON. Schema version 1 and CLI version
 1.0.0 (`--version`) describe this initial interface.
 
@@ -71,5 +88,5 @@ python3 scripts/smoke-cli.py "$(swift build --show-bin-path)/nozzle-cli"
 
 The smoke test runs the real executable with temporary fixtures and checks JSON,
 stream separation, exit codes, help, profile overrides, pagination, and discovery.
-Live printing, connection/status polling, movement, and raw command execution are
-outside this intentionally small surface. Use the native app for those operations.
+Live print-file streaming remains in the native app. The CLI surface is intended for
+short supervised operations and status checks.
