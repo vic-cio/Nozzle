@@ -33,6 +33,13 @@ connects to a built-in simulated Marlin printer. You can also launch straight in
 NOZZLE_DEMO=1 ./Nozzle.app/Contents/MacOS/Nozzle
 ```
 
+### Command-line tools
+
+Use `swift run nozzle-cli --help` for GUI-free file inspection, validation, command
+previews, profile inspection, serial discovery, and console risk assessment. Reports
+are JSON by default; no CLI command opens a printer connection. See [CLI usage](docs/cli.md)
+for commands, exit codes, and validation limits.
+
 ### Why there is no `.xcodeproj`
 
 Nozzle is a Swift Package. `swift build` and `swift test` work from the terminal, and

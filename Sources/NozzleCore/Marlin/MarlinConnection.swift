@@ -392,7 +392,7 @@ public actor MarlinConnection {
 
     /// Strips comments and whitespace. Marlin rejects empty lines, and a trailing
     /// `;comment` would be included in the checksum for no benefit.
-    static func sanitise(_ command: String) -> String {
+    public static func sanitise(_ command: String) -> String {
         var text = command
         if let semicolon = text.firstIndex(of: ";") {
             text = String(text[text.startIndex..<semicolon])

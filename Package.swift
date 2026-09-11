@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .executable(name: "Nozzle", targets: ["Nozzle"]),
         .library(name: "NozzleCore", targets: ["NozzleCore"]),
+        .executable(name: "nozzle-cli", targets: ["NozzleCLI"]),
     ],
     targets: [
         // Everything that talks to the printer. No SwiftUI here on purpose:
@@ -16,6 +17,9 @@ let package = Package(
         // The macOS app. Only this target imports SwiftUI.
         .executableTarget(name: "Nozzle", dependencies: ["NozzleCore"]),
 
+        .target(name: "NozzleCLIKit", dependencies: ["NozzleCore"]),
+        .executableTarget(name: "NozzleCLI", dependencies: ["NozzleCLIKit"]),
+        .testTarget(name: "NozzleCLITests", dependencies: ["NozzleCLIKit"]),
         .testTarget(name: "NozzleCoreTests", dependencies: ["NozzleCore"]),
     ]
 )

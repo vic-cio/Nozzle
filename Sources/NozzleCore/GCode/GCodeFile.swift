@@ -1,7 +1,7 @@
 import Foundation
 
 /// The volume a sliced file actually uses, from Cura's `;MINX:`/`;MAXX:` header.
-public struct GCodeBounds: Equatable, Sendable {
+public struct GCodeBounds: Codable, Equatable, Sendable {
     public var minX: Double?
     public var minY: Double?
     public var minZ: Double?
@@ -24,7 +24,7 @@ public struct GCodeBounds: Equatable, Sendable {
 }
 
 /// One layer, and where it sits in the file.
-public struct GCodeLayer: Equatable, Sendable {
+public struct GCodeLayer: Codable, Equatable, Sendable {
     /// Cura's own `;LAYER:` number, which starts at 0.
     public let number: Int
     public let firstLineIndex: Int
@@ -51,7 +51,7 @@ public struct GCodeLayer: Equatable, Sendable {
 /// Every field is optional on purpose. A hand-written file, or one from a slicer that
 /// is not Cura, has none of this — and that must degrade to "we do not know" rather
 /// than to a confident wrong number.
-public struct GCodeMetadata: Equatable, Sendable {
+public struct GCodeMetadata: Codable, Equatable, Sendable {
     public var flavor: String?
     public var generator: String?
     public var targetMachine: String?
@@ -381,8 +381,8 @@ public struct GCodeFile: Sendable, Equatable {
 }
 
 /// Something the user should know before printing a particular file.
-public struct GCodeWarning: Equatable, Sendable, Identifiable {
-    public enum Severity: Sendable, Equatable {
+public struct GCodeWarning: Codable, Equatable, Sendable, Identifiable {
+    public enum Severity: String, Codable, Sendable, Equatable {
         /// Printing anyway would damage something or certainly fail.
         case blocking
         /// Worth reading once.
