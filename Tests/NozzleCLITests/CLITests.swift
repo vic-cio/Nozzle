@@ -119,4 +119,16 @@ struct CLITests {
         #expect(try data(CLIRunner.run(["--version"]))["version"] as? String == "1.0.0")
         #expect(String(decoding: CLIRunner.run(["file", "--help"]).stdout, as: UTF8.self).contains("file validate"))
     }
+
+    @Test func liveStatusReportsWhenTheAppIsUnavailable() throws {
+        let missingSocket = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .path
+        let result = CLIRunner.run(["live", "status", "--socket", missingSocket])
+
+        #expect(result.exitCode == 1)
+        #expect(result.stdout.isEmpty)
+        let body = try JSONSerialization.jsonObject(with: result.stderr) as? [String: Any]
+        #expect((body?["error"] as? [String: Any])?["code"] as? String == "app_unavailable")
+    }
 }
