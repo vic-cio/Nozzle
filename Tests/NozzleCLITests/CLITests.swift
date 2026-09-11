@@ -131,4 +131,46 @@ struct CLITests {
         let body = try JSONSerialization.jsonObject(with: result.stderr) as? [String: Any]
         #expect((body?["error"] as? [String: Any])?["code"] as? String == "app_unavailable")
     }
+
+    @Test(arguments: [
+        ["live", "connect"],
+        ["live", "disconnect"],
+        ["live", "home"],
+        ["live", "home", "--axes", "XZ"],
+        ["live", "jog", "X", "5"],
+        ["live", "heat", "nozzle", "210"],
+        ["live", "heat", "bed", "60"],
+        ["live", "extrude", "5"],
+        ["live", "heaters-off"],
+        ["live", "motors-off"],
+        ["live", "send", "M105"],
+        ["live", "send", "M112", "--confirm-dangerous"],
+    ])
+    func liveCommandsReachTheAppBoundary(arguments: [String]) throws {
+        let missingSocket = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .path
+        let result = CLIRunner.run(arguments + ["--socket", missingSocket])
+        let body = try JSONSerialization.jsonObject(with: result.stderr) as? [String: Any]
+
+        #expect(result.exitCode == 1)
+        #expect((body?["error"] as? [String: Any])?["code"] as? String == "app_unavailable")
+    }
+
+    @Test(arguments: [
+        ["live", "home", "--axes", "Q"],
+        ["live", "jog", "Q", "5"],
+        ["live", "jog", "X", "nan"],
+        ["live", "heat", "chamber", "50"],
+        ["live", "heat", "nozzle", "infinity"],
+        ["live", "extrude", "0"],
+        ["live", "send", "M112"],
+    ])
+    func liveCommandsRejectUnsafeOrMalformedArguments(arguments: [String]) throws {
+        let result = CLIRunner.run(arguments)
+        let body = try JSONSerialization.jsonObject(with: result.stderr) as? [String: Any]
+
+        #expect(result.exitCode == 2)
+        #expect((body?["error"] as? [String: Any])?["code"] as? String == "usage")
+    }
 }
